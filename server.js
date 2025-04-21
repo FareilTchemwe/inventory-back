@@ -487,7 +487,7 @@ app.get("/api/dashboard/low-stock/", checkAuthentication, (req, res) => {
 app.get("/get-products/", checkAuthentication, (req, res) => {
   const userId = req.userId;
   const productQuery =
-    "SELECT products.name, products.current_stock, products.price, products.minimum_stock, products.status, categories.name as category FROM products INNER JOIN categories ON products.category_id = categories.id WHERE products.user_id = ? AND categories.status = ?";
+    "SELECT products.id, products.name, products.current_stock, products.price, products.minimum_stock, products.status, categories.name as category FROM products INNER JOIN categories ON products.category_id = categories.id WHERE products.user_id = ? AND categories.status = ?";
 
   db.query(productQuery, [userId, "active"], (prodErr, productResults) => {
     if (prodErr)
@@ -594,13 +594,87 @@ app.put("/update-product/", (req, res) => {
   );
 });
 
-// Delete Product - DELETE /products/:id
-app.delete("/delete-product/:id", (req, res) => {
-  const { id } = req.params; // Product ID from URL
+// Update Existing Product
+app.put("/sell-product/", checkAuthentication, (req, res) => {
+  const { productId, quantity, saleDate } = req.body; // Updated product details from request body
+
+  // Input Validation
+  if (!productId || !quantity || !saleDate) {
+    return res.status(400).json({ error: "All product fields are required." });
+  }
+
+  // SQL query to update product details
+  const updateProductQuery =
+    "UPDATE products SET  current_stock = ?, status = ? WHERE id = ?";
+  const userId = req.userId;
+  const getProductQuery =
+    "SELECT price, current_stock, minimum_stock FROM products WHERE id = ?";
+  const insertSaleHistoryQuery =
+    "INSERT INTO `sales_history`(`product_id`, `user_id`, `quantity`, `amount`, `sale_date`) VALUES (?,?,?,?,?)";
+
+  db.query(getProductQuery, [productId], (err, result) => {
+    if (err) {
+      console.error("Database error (select price):", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+
+    if (result.length === 0) {
+      return res.status(500).json({ error: "Price information not found." });
+    }
+
+    const amount = result[0].price;
+    const currenQty = Number(result[0].current_stock);
+    const minimumQty = Number(result[0].minimum_stock);
+    const newQty = currenQty - Number(quantity);
+    let status;
+
+    if (newQty > minimumQty) {
+      status = "available";
+    } else if (newQty == 0) {
+      status = "finished";
+    } else if (newQty < 0) {
+      return res
+        .status(400)
+        .json({ error: "Quantity Sold is greater than Quantity available" });
+    } else {
+      status = "low";
+    }
+    // Step 2: update details of the product
+    db.query(updateProductQuery, [newQty, status, productId], (err, result) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Product not found." });
+      }
+      // Step 3: Insert into sales history
+      db.query(
+        insertSaleHistoryQuery,
+        [productId, userId, quantity, amount, saleDate],
+        (err, insertResult) => {
+          if (err) {
+            console.error("Database error (insert history):", err);
+            return res.status(500).json({ error: "Internal Server Error" });
+          }
+
+          return res
+            .status(200)
+            .json({ success: 1, message: "Sale recorded successfully." });
+        }
+      );
+    });
+  });
+});
+
+// Delete Product -
+app.delete("/delete-product/", (req, res) => {
+  const { productId } = req.body;
 
   // SQL query to delete the product
   const deleteQuery = "DELETE FROM products WHERE id = ?";
-  db.query(deleteQuery, [id], (err, results) => {
+  db.query(deleteQuery, [productId], (err, results) => {
     if (err) {
       console.error("Database error:", err);
       return res.status(500).json({ error: "Internal Server Error" });
@@ -610,7 +684,9 @@ app.delete("/delete-product/:id", (req, res) => {
       return res.status(404).json({ error: "Product not found." });
     }
 
-    return res.status(200).json({ success: 1 });
+    return res
+      .status(200)
+      .json({ success: true, message: "Product Deleted", id: productId });
   });
 });
 
@@ -625,7 +701,7 @@ app.put("/replenish", (req, res) => {
   }
 
   // Get the current quantity and threshold from the products table
-  const query = `SELECT current_stock FROM products WHERE id = ?`;
+  const query = `SELECT current_stock, minimum_stock FROM products WHERE id = ?`;
 
   db.query(query, [productId], (err, results) => {
     if (err) {
@@ -639,26 +715,30 @@ app.put("/replenish", (req, res) => {
       return res.status(404).json({ error: "Product not found." });
     }
 
-    const currentQty = results[0].current_stock;
-    const newQty = currentQty + quantity;
-    const currentMinium = results[0].current_minium;
-    const updateQty = `UPDATE products SET current_stock = ? WHERE id = ?`;
+    const currentQty = Number(results[0].current_stock);
+    const newQty = currentQty + Number(quantity);
+    const currentMinium = results[0].minimum_stock;
+    const updateQty = `UPDATE products SET current_stock = ?, status = ?  WHERE id = ?`;
 
-    const updateStatus = `UPDATE products SET status = ? WHERE id = ?`;
     let status;
-    if (currentMinium > newQty) {
+    if (newQty > currentMinium) {
       status = "available";
     } else {
       status = "low";
     }
     // Perform the update query
-    db.query(updateQty, [newQty, productId], (err, updateResults) => {
+    db.query(updateQty, [newQty, status, productId], (err, updateResults) => {
       if (err) {
         console.error("Error updating product data:", err);
         return res.status(500).json({ error: "Failed to update product." });
       }
 
-      res.status(200).json({ success: true, message: "Quantity Updated" });
+      res.status(200).json({
+        success: true,
+        message: "Quantity Updated",
+        status: status,
+        qty: newQty,
+      });
     });
   });
 });
