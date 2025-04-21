@@ -318,6 +318,23 @@ app.get("/get-user", checkAuthentication, async (req, res) => {
   }
 });
 
+// Add token refresh endpoint
+app.post("/refresh-token", checkAuthentication, (req, res) => {
+  // Since we already verified the token in checkAuthentication middleware,
+  // we can generate a new token
+  const token = jwt.sign(
+    { userId: req.userId, username: req.username },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRATION }
+  );
+
+  return res.status(200).json({
+    success: true,
+    token,
+    expiresIn: JWT_EXPIRATION,
+  });
+});
+
 // Dashboard API Routes
 app.get("/api/dashboard/stats/", checkAuthentication, (req, res) => {
   try {
@@ -497,26 +514,36 @@ app.get("/get-products/", checkAuthentication, (req, res) => {
 });
 
 // Create Product Route
-app.post("/add-product", (req, res) => {
-  const { name, size, color, price, qty, threshold, status } = req.body;
+app.post("/create-product", checkAuthentication, (req, res) => {
+  const { name, categoryId, currentStock, price, minimumStock } = req.body;
 
+  const userId = req.userId;
   // Validate required fields
-  if (!name || !size || !color || !price || !qty || !threshold || !status) {
+  if (!name || !categoryId || !currentStock || !minimumStock || !price) {
     res.status(400).json({ error: "All fields are required." });
     return;
   }
 
+  let status;
+
+  if (currentStock > minimumStock) {
+    status = "available";
+  } else if (currentStock == 0) {
+    status = "finished";
+  } else {
+    status = "low";
+  }
+
   const query = `
-    INSERT INTO products (name, size, color, price, qty, threshold, status) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO products(user_id, name, category_id, current_stock, price, minimum_stock, status) VALUES (?,?,?,?,?,?,?)
   `;
 
   db.query(
     query,
-    [name, size, color, price, qty, threshold, status],
+    [userId, name, categoryId, currentStock, price, minimumStock, status],
     (err, result) => {
       if (err) {
-        console.error("Error adding product:", err);
+        console.error("Error Creating product:", err);
         res
           .status(500)
           .json({ error: "An error occurred while adding the product." });
@@ -525,14 +552,14 @@ app.post("/add-product", (req, res) => {
 
       res.status(201).json({
         success: 1,
-        productId: result.insertId,
+        message: "Product Created",
       });
     }
   );
 });
 
 // Get Product by ID
-app.get("/get-product/:id", (req, res) => {
+app.get("/get-product/:id", checkAuthentication, (req, res) => {
   const productId = req.params.id;
 
   const query = "SELECT * FROM products WHERE id = ?";
@@ -550,46 +577,53 @@ app.get("/get-product/:id", (req, res) => {
       return;
     }
 
-    res.status(200).json({ product: result[0] });
+    res.status(200).json({ success: true, product: result });
   });
 });
 
 // Update Existing Product
-app.put("/update-product/", (req, res) => {
-  const { id } = req.params; // Product ID from URL
-  const { name, size, color, price, qty, status, threshold } = req.body; // Updated product details from request body
+app.put("/update-product/", checkAuthentication, (req, res) => {
+  const { productId, name, categoryId, currentStock, price, minimumStock } =
+    req.body;
 
-  // Input Validation
-  if (!name || !size || !color || !price || !qty || !status || !threshold) {
-    return res.status(400).json({ error: "All product fields are required." });
+  // Validate required fields
+  if (!name || !categoryId || !currentStock || !minimumStock || !price) {
+    res.status(400).json({ error: "All fields are required." });
+    return;
   }
 
+  let status;
+
+  if (currentStock > minimumStock) {
+    status = "available";
+  } else if (currentStock == 0) {
+    status = "finished";
+  } else {
+    status = "low";
+  }
   // SQL query to update product details
   const updateQuery =
-    "UPDATE products SET name = ?, qty = ?, price = ?, size = ?, color = ?, status = ?, threshold = ? WHERE id = ?";
+    "UPDATE products SET name= ?,category_id= ?,current_stock= ?,price= ?,minimum_stock= ?, status = ? WHERE id = ?";
   db.query(
     updateQuery,
-    [
-      name.trim(),
-      qty,
-      price,
-      size.trim(),
-      color.trim(),
-      status.trim(),
-      threshold,
-      id,
-    ],
+    [name, categoryId, currentStock, price, minimumStock, status, productId],
     (err, results) => {
       if (err) {
         console.error("Database error:", err);
-        return res.status(500).json({ error: "Internal Server Error" });
+        return res
+          .status(500)
+          .json({ error: "Internal Server Error", productId });
       }
 
       if (results.affectedRows === 0) {
-        return res.status(404).json({ error: "Product not found." });
+        return res
+          .status(404)
+          .json({ error: "Product not found.", id: productId });
       }
 
-      return res.status(200).json({ success: 1 });
+      return res
+        .status(200)
+        .json({ success: true, messagge: "Product Updated" });
     }
   );
 });
@@ -669,7 +703,7 @@ app.put("/sell-product/", checkAuthentication, (req, res) => {
 });
 
 // Delete Product -
-app.delete("/delete-product/", (req, res) => {
+app.delete("/delete-product/", checkAuthentication, (req, res) => {
   const { productId } = req.body;
 
   // SQL query to delete the product
@@ -691,7 +725,7 @@ app.delete("/delete-product/", (req, res) => {
 });
 
 // Shop Route (POST) to update product quantity based on the purchase
-app.put("/replenish", (req, res) => {
+app.put("/replenish", checkAuthentication, (req, res) => {
   const { productId, quantity } = req.body;
 
   if (!productId || !quantity) {
@@ -743,20 +777,16 @@ app.put("/replenish", (req, res) => {
   });
 });
 
-// Add token refresh endpoint
-app.post("/refresh-token", checkAuthentication, (req, res) => {
-  // Since we already verified the token in checkAuthentication middleware,
-  // we can generate a new token
-  const token = jwt.sign(
-    { userId: req.userId, username: req.username },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRATION }
-  );
+//get all products
+app.get("/get-categories", checkAuthentication, (req, res) => {
+  const userId = req.userId;
+  const categoryQuery =
+    "SELECT id, name FROM `categories` WHERE user_id = ? AND status = ? ";
 
-  return res.status(200).json({
-    success: true,
-    token,
-    expiresIn: JWT_EXPIRATION,
+  db.query(categoryQuery, [userId, "active"], (catErr, categoryResults) => {
+    if (catErr)
+      return res.status(500).json({ error: "Internal Server Error", catErr });
+    res.status(200).json({ success: true, categories: categoryResults });
   });
 });
 
