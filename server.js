@@ -610,15 +610,11 @@ app.put("/update-product/", checkAuthentication, (req, res) => {
     (err, results) => {
       if (err) {
         console.error("Database error:", err);
-        return res
-          .status(500)
-          .json({ error: "Internal Server Error", productId });
+        return res.status(500).json({ error: "Internal Server Error" });
       }
 
       if (results.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({ error: "Product not found.", id: productId });
+        return res.status(404).json({ error: "Product not found." });
       }
 
       return res
@@ -718,9 +714,7 @@ app.delete("/delete-product/", checkAuthentication, (req, res) => {
       return res.status(404).json({ error: "Product not found." });
     }
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Product Deleted", id: productId });
+    return res.status(200).json({ success: true, message: "Product Deleted" });
   });
 });
 
@@ -777,7 +771,7 @@ app.put("/replenish", checkAuthentication, (req, res) => {
   });
 });
 
-//get all products
+//get categories
 app.get("/get-categories", checkAuthentication, (req, res) => {
   const userId = req.userId;
   const categoryQuery =
@@ -790,6 +784,133 @@ app.get("/get-categories", checkAuthentication, (req, res) => {
   });
 });
 
+//get all categories
+app.get("/getAll-categories", checkAuthentication, (req, res) => {
+  const userId = req.userId;
+  const categoryQuery =
+    "SELECT id, name, status FROM `categories` WHERE user_id = ?";
+
+  db.query(categoryQuery, [userId], (catErr, categoryResults) => {
+    if (catErr)
+      return res.status(500).json({ error: "Internal Server Error", catErr });
+    res.status(200).json({ success: true, categories: categoryResults });
+  });
+});
+
+app.put("/updateCat-status", checkAuthentication, (req, res) => {
+  const { status, categoryId } = req.body;
+
+  // Validate required fields
+  if (!categoryId || !status) {
+    res.status(400).json({ error: "All fields are required." });
+    return;
+  }
+
+  // SQL query to update product details
+  const updateQuery = "UPDATE categories SET status = ? WHERE id = ?";
+  db.query(updateQuery, [status, categoryId], (err, results) => {
+    if (err) {
+      console.error("Database error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: "Category not found." });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, messagge: "Category Updated" });
+  });
+});
+
+// Delete categories-
+app.delete("/delete-category/", checkAuthentication, (req, res) => {
+  const { categoryId } = req.body;
+
+  // SQL query to delete the product
+  const deleteQuery = "DELETE FROM categories WHERE id = ?";
+  db.query(deleteQuery, [categoryId], (err, results) => {
+    if (err) {
+      console.error("Database error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: "Category not found." });
+    }
+
+    return res.status(200).json({ success: true, message: "Category Deleted" });
+  });
+});
+
+//get category details
+app.get("/get-category/:id", checkAuthentication, (req, res) => {
+  const categoryId = req.params.id;
+  const categoryQuery = "SELECT id, name FROM `categories` WHERE id = ?";
+
+  db.query(categoryQuery, [categoryId], (catErr, categoryResults) => {
+    if (catErr)
+      return res.status(500).json({ error: "Internal Server Error", catErr });
+    res.status(200).json({ success: true, category: categoryResults });
+  });
+});
+
+// Create Category Route
+app.post("/create-category", checkAuthentication, (req, res) => {
+  const { name } = req.body;
+
+  const userId = req.userId;
+  // Validate required fields
+  if (!name) {
+    res.status(400).json({ error: "All fields are required." });
+    return;
+  }
+
+  const query = `INSERT INTO categories(name, user_id)  VALUES (?,?)  `;
+
+  db.query(query, [name, userId], (err, result) => {
+    if (err) {
+      console.error("Error Creating category:", err);
+      res
+        .status(500)
+        .json({ error: "An error occurred while adding the category." });
+      return;
+    }
+
+    res.status(201).json({
+      success: 1,
+      message: "category Created",
+    });
+  });
+});
+
+app.put("/update-category", checkAuthentication, (req, res) => {
+  const { name, categoryId } = req.body;
+
+  // Validate required fields
+  if (!categoryId || !name) {
+    res.status(400).json({ error: "All fields are required." });
+    return;
+  }
+
+  // SQL query to update product details
+  const updateQuery = "UPDATE categories SET name = ? WHERE id = ?";
+  db.query(updateQuery, [name, categoryId], (err, results) => {
+    if (err) {
+      console.error("Database error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: "Category not found." });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, messagge: "Category Updated" });
+  });
+});
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
