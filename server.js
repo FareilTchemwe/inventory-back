@@ -4,6 +4,7 @@ const mysql = require("mysql2");
 const bcrypt = require("bcrypt");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
+const cors = require("cors");
 
 const app = express();
 
@@ -11,16 +12,17 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static("public")); // Serve static files from 'public' directory
-// ✅ Middleware personnalisé pour CORS
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*"); // Autoriser toutes les origines
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"); // Méthodes HTTP autorisées
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  next();
-});
+
+// Allow all origins by setting origin to true
+app.use(
+  cors({
+    origin: true, // This allows all origins
+  })
+);
+
+if (req.method === "OPTIONS") {
+  return res.status(200).end();
+}
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || "your-strong-secret-key"; // Use environment variable in production
 const JWT_EXPIRATION = "24h"; // Token expires in 24 hours
