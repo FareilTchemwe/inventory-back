@@ -80,6 +80,10 @@ app.get("/check-auth", (req, res) => {
   }
 });
 
+app.get("/test", (req, res) => {
+  return res.status(200).json({ message: "hello world" });
+});
+
 // Authentication Routes
 app.post("/register", async (req, res) => {
   const { fullName, email, username, password } = req.body;
