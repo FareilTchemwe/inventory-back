@@ -958,5 +958,5 @@ app.put("/update-category", checkAuthentication, (req, res) => {
 // Start the server
 const PORT = process.env.SERVER_PORT;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${process.env.PORT}`);
 });
