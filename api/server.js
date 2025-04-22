@@ -12,6 +12,7 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static("public")); // Serve static files from 'public' directory
+app.options("*", cors()); // enable pre-flight for all routes
 
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || "your-strong-secret-key"; // Use environment variable in production
