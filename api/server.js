@@ -4,6 +4,7 @@ const mysql = require("mysql2");
 const bcrypt = require("bcrypt");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
+const serverless = require("serverless-http");
 
 const app = express();
 
@@ -957,8 +958,6 @@ app.put("/update-category", checkAuthentication, (req, res) => {
       .json({ success: true, messagge: "Category Updated" });
   });
 });
-// Start the server
-const PORT = process.env.SERVER_PORT;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// Export handler for Vercel
+module.exports = app;
+module.exports.handler = serverless(app);
