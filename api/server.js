@@ -9,6 +9,16 @@ const serverless = require("serverless-http");
 const app = express();
 
 // Middleware
+
+const cors = require("cors");
+
+app.use(
+  cors({
+    origin: "https://stock-inventory-pro.netlify.app", // your frontend Netlify URL
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true, // if you need to allow cookies or Authorization headers
+  })
+);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static("public")); // Serve static files from 'public' directory
