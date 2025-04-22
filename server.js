@@ -290,7 +290,7 @@ app.get("/get-user", checkAuthentication, async (req, res) => {
 
   try {
     db.query(
-      "SELECT first_name, last_name, username, email FROM users WHERE id = ?",
+      "SELECT first_name, last_name, username, email, username FROM users WHERE id = ?",
       [userId],
       (err, results) => {
         if (err)
@@ -304,6 +304,7 @@ app.get("/get-user", checkAuthentication, async (req, res) => {
         return res.status(200).json({
           success: true,
           user: {
+            username: user.username,
             first_name: user.first_name,
             last_name: user.last_name,
             username: user.username,
