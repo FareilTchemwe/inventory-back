@@ -214,7 +214,7 @@ app.put("/reset-pass", checkAuthentication, async (req, res) => {
         const user = results[0];
         const isMatch = await bcrypt.compare(oldPassword, user.password);
         if (!isMatch) {
-          return res.status(400).json({ error: "Old password is incorrect." });
+          return res.status(200).json({ error: "Old password is incorrect." });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -248,35 +248,55 @@ app.put("/reset-pass", checkAuthentication, async (req, res) => {
   }
 });
 
-app.put("/edit-user", checkAuthentication, async (req, res) => {
-  const { firstname, lastname, username } = req.body;
+app.put("/update-user", checkAuthentication, async (req, res) => {
+  const { firstname, lastname, username, email } = req.body;
   const userId = req.userId;
 
-  if (!firstname || !lastname || !username) {
+  if (!firstname || !lastname || !username || !email) {
     return res.status(400).json({ error: "All fields are required." });
   }
 
   try {
     db.query(
-      "UPDATE users SET first_name = ?, last_name = ?, username = ? WHERE id = ?",
-      [firstname.trim(), lastname.trim(), username.trim(), userId],
-      (err) => {
-        if (err)
+      "SELECT COUNT(*) AS count FROM `users` WHERE username = ? AND id != ?",
+      [username, userId],
+      (err, result) => {
+        if (err) {
           return res.status(500).json({ error: "Internal Server Error" });
+        }
 
-        // Generate new token if username was changed
-        const token = jwt.sign(
-          { userId, username: username.trim() },
-          JWT_SECRET,
-          { expiresIn: JWT_EXPIRATION }
+        if (result[0].count > 0) {
+          return res.status(200).json({ error: "Username already exist" });
+        }
+        db.query(
+          "UPDATE users SET first_name = ?, last_name = ?, username = ?, email = ? WHERE id = ?",
+          [
+            firstname.trim(),
+            lastname.trim(),
+            username.trim(),
+            email.trim(),
+            userId,
+          ],
+          (err) => {
+            if (err) {
+              return res.status(500).json({ error: "Internal Server Error" });
+            }
+
+            // Generate new token if username was changed
+            const token = jwt.sign(
+              { userId, username: username.trim() },
+              JWT_SECRET,
+              { expiresIn: JWT_EXPIRATION }
+            );
+
+            return res.status(200).json({
+              success: true,
+              message: "User details updated successfully.",
+              token: token,
+              expiresIn: JWT_EXPIRATION,
+            });
+          }
         );
-
-        return res.status(200).json({
-          success: true,
-          message: "User details updated successfully.",
-          token,
-          expiresIn: JWT_EXPIRATION,
-        });
       }
     );
   } catch (error) {
@@ -313,6 +333,28 @@ app.get("/get-user", checkAuthentication, async (req, res) => {
         });
       }
     );
+  } catch (error) {
+    console.error("Error getting user:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.delete("/delete-user", checkAuthentication, async (req, res) => {
+  const userId = req.userId;
+
+  try {
+    db.query("DELETE FROM `users` WHERE id = ?", [userId], (err, results) => {
+      if (err) return res.status(500).json({ error: "Internal Server Error" });
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "user deleted",
+      });
+    });
   } catch (error) {
     console.error("Error getting user:", error);
     return res.status(500).json({ error: "Internal Server Error" });
