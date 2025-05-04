@@ -888,17 +888,28 @@ app.delete("/delete-category/", checkAuthentication, (req, res) => {
 
   // SQL query to delete the product
   const deleteQuery = "DELETE FROM categories WHERE id = ?";
-  db.query(deleteQuery, [categoryId], (err, results) => {
+  const deleteProduct = "DELETE FROM products WHERE category_id = ?";
+
+  db.query(deleteProduct, [categoryId], (err, resultProduct) => {
     if (err) {
       console.error("Database error:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
 
-    if (results.affectedRows === 0) {
-      return res.status(404).json({ error: "Category not found." });
-    }
+    db.query(deleteQuery, [categoryId], (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
 
-    return res.status(200).json({ success: true, message: "Category Deleted" });
+      if (results.affectedRows === 0) {
+        return res.status(404).json({ error: "Category not found." });
+      }
+
+      return res
+        .status(200)
+        .json({ success: true, message: "Category Deleted" });
+    });
   });
 });
 
